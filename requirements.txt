@@ -1,2 +1,3 @@
-torch
-transformers
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+llama-cpp-python==0.2.86
+huggingface-hub>=0.24.5
