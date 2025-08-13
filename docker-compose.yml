@@ -1,16 +1,21 @@
 services:
   api:
     build: ./app
-    # Bind this service to the model and inject URL/ID as env vars
     models:
       llm:
         endpoint_var: LLM_URL
         model_var: LLM_ID
+      sentence_embedder:
+        endpoint_var: EMBEDDER_URL
+        model_var: EMBEDDER_ID
     environment:
       PORT: "8080"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
       - "8080:8080"
 
 models:
   llm:
     model: hf.co/Triangle104/SmolLM3-3B-Q4_K_M-GGUF:Q4_K_M
+  sentence_embedder:
+    model: hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M

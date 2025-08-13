@@ -4,3 +4,5 @@ requests
 openai
 pypdf
 python-multipart
+bs4
+faiss-cpu
