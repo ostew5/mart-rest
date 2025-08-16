@@ -2,9 +2,6 @@ services:
   api:
     build: ./app
     models:
-      llm:
-        endpoint_var: LLM_URL
-        model_var: LLM_ID
       sentence_embedder:
         endpoint_var: EMBEDDER_URL
         model_var: EMBEDDER_ID
@@ -15,7 +12,5 @@ services:
       - "8080:8080"
 
 models:
-  llm:
-    model: hf.co/Triangle104/SmolLM3-3B-Q4_K_M-GGUF:Q4_K_M
   sentence_embedder:
     model: hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M

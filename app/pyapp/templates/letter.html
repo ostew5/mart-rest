@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 25mm; }
+  body { font-family: "Arial", serif; line-height: 1.4; font-size: 11pt; }
+  .letterhead { white-space: pre-wrap; margin-bottom: 12pt; }
+  .date { margin-bottom: 12pt; }
+  .inside { white-space: pre-wrap; margin-bottom: 12pt; }
+  .attention { font-weight: bold; margin-bottom: 6pt; }
+  .salutation { margin-bottom: 12pt; }
+  .letterbody { white-space: pre-wrap; margin-bottom: 12pt; }
+  p { margin: 0; margin-bottom: 12pt; }
+  .closing { margin-top: 18pt; margin-bottom: 18pt; }
+  .signature { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  {% if letterhead %}<div class="letterhead">{{ letterhead }}</div>{% endif %}
+  {% if date %}<div class="date">{{ date }}</div>{% endif %}
+  {% if inside_address %}<div class="inside">{{ inside_address }}</div>{% endif %}
+  {% if attention_line %}<div class="attention">{{ attention_line }}</div>{% endif %}
+  {% if salutation %}<div class="salutation">{{ salutation }}</div>{% endif %}
+  {% if letterbody %}
+    <div class="body">{{ letterbody | bullets | safe }}</div>
+  {% endif %}
+  {% if closing %}<div class="closing">{{ closing }}</div>{% endif %}
+  {% if signature %}<div class="signature">{{ signature }}</div>{% endif %}
+</body>
+</html>
