@@ -27,7 +27,7 @@ env = Environment(
 router = APIRouter(prefix="/generate_cover_letter", tags=["generate_cover_letter"])
 
 EMBEDDER_ID = os.getenv("EMBEDDER_ID")
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def _deserialize_faiss(index):
