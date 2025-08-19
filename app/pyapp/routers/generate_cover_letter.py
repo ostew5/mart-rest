@@ -361,7 +361,7 @@ def status(job_id: str, request: Request):
 
     return {"uuid": job_id, **job}
 
-@router.get("/cover_letter/{job_id}")
+@router.get("/result/{job_id}")
 def status(job_id: str, request: Request):    
     pdf_io = BytesIO()
 
