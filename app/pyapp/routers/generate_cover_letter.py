@@ -133,7 +133,7 @@ Re: <Job title> position
 <2 paragraphs explaining why the applicant is a good fit for the role and the company's needs explicitly>
 <3 bullet points referencing snippets that support the applicant's suitability in STAR format (do not list as Situation, Task, Action, Result just write each STAR as a bullet point)>
 - closing
-Thank you for considering my application. I look forward to the opportunity to discuss how I can contibute to <Company> further.
+Thank you for considering my application. I look forward to the opportunity to discuss how I can contribute to <Company> further.
 - signature
 Sincerely yours,
 <Applicant name>
