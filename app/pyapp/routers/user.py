@@ -8,21 +8,25 @@ It contains the endpoints:
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request
 from pyapp.helpers.user_authentication import generate_jwt
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/user", tags=["user"])
 
-@router.post("/user/login")
+class Login(BaseModel):
+    uuid: str
+    passkey: str
+
+@router.post("/login")
 def login(
-    uuid: str,
-    passkey: str,
+    login: Login,
     request: Request
 ):
     try:
-        user = request.app.state.users[uuid]
+        user = request.app.state.users[login.uuid]
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"User not found with exception: {e}")
 
-    if not user["passkey"] == passkey:
+    if not user["passkey"] == login.passkey:
         raise HTTPException(status_code=401, detail=f"Failed to authenticate user")
 
-    return {"token": generate_jwt(uuid)}
+    return {"token": generate_jwt(login.uuid)}

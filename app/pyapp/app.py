@@ -3,7 +3,7 @@ import os, openai, boto3
 
 EMBEDDER_URL = os.getenv("EMBEDDER_URL")
 
-app = FastAPI(title="Mart 1.0 - Resume Generator")
+app = FastAPI(title="Mart - Cover Letter Generator")
 
 from pyapp.routers.generate_cover_letter import router as generate_cover_letter_router
 from pyapp.routers.index_resume import router as index_resume_router
@@ -45,7 +45,7 @@ async def initialise():
             }
         },
         "281d10f6-3bed-40c2-96f0-ba120f38ecbd":{
-            "passkey": "secret"
+            "passkey": "secret",
             "subscription_level": "premium",
             "requests": {
                 "index_resume": [],

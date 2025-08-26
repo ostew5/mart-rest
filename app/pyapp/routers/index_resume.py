@@ -8,7 +8,7 @@ It contains the endpoints:
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
-from pyapp.helpers.user_authentication import authenticate, rate_limit
+from pyapp.helpers.user_authentication import authenticate, rate_limiter
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
 from pypdf import PdfReader
 from io import BytesIO
@@ -188,12 +188,12 @@ def index_resume(
         _set_status(app, job_id, status=f"Failed with error: {str(e)}")
 
 @router.post("/upload")
-async def index_resume_endpoint(
+async def start_resume_indexing_job(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     request: Request,
     user: dict = Depends(authenticate),
-    _ = Depends(rate_limit)
+    _ = Depends(rate_limiter("index_resume"))
 ):
     # Check file size (require PDF to be less than 25MB)
     if file.size > 25 * 1024 * 1024:
@@ -215,7 +215,7 @@ async def index_resume_endpoint(
     }
 
 @router.get("/status/{job_id}")
-def status(job_id: str, request: Request):
+def get_resume_indexing_job_status(job_id: str, request: Request):
     app = request.app
     if not hasattr(app.state, "index_jobs"):
         raise HTTPException(status_code=404, detail="No jobs found")
