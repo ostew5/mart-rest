@@ -61,4 +61,3 @@ The system integrates **RAG and LLM-based cover letter generation, PDF rendering
    ```bash
    docker compose up --build
    ```
-   docker-compose up --build
