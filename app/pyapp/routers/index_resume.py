@@ -7,7 +7,8 @@ It contains the endpoints:
 - GET /index_resume/status/{job_id}: Returns the status of the indexing job.
 """
 
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
+from pyapp.helpers.user_authentication import authenticate, rate_limit
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
 from pypdf import PdfReader
 from io import BytesIO
@@ -190,7 +191,9 @@ def index_resume(
 async def index_resume_endpoint(
     file: UploadFile,
     background_tasks: BackgroundTasks,
-    request: Request
+    request: Request,
+    user: dict = Depends(authenticate),
+    _ = Depends(rate_limit)
 ):
     # Check file size (require PDF to be less than 25MB)
     if file.size > 25 * 1024 * 1024:

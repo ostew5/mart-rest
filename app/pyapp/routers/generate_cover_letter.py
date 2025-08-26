@@ -9,13 +9,14 @@ and starts a background job to generate a cover letter.
 - GET /generate_cover_letter/result/{job_id}: Returns the generated cover letter.
 """
 
-from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
 import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
+from pyapp.helpers.user_authentication import authenticate, rate_limit
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from fastapi.responses import StreamingResponse
 from bs4 import BeautifulSoup
 from weasyprint import HTML
 from datetime import date
-from fastapi.responses import StreamingResponse
 from io import BytesIO
 import numpy as np
 
@@ -302,7 +303,9 @@ async def generate_cover_letter_endpoint(
     background_tasks: BackgroundTasks,
     request: Request,
     job_listing_url: str = Query(..., description="URL of the LinkedIn job listing"),
-    file_id: str = Query(..., description="Indexed resume uuid")
+    file_id: str = Query(..., description="Indexed resume uuid"),
+    user: dict = Depends(authenticate),
+    _ = Depends(rate_limit)
 ):
     job_listing_url = job_listing_url.strip()
     file_id = file_id.strip()
