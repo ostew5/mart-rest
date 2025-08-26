@@ -1,10 +1,10 @@
 # Mart - AI-Powered Cover Letter Generator
 
-> README.md generated with NotebookLM + ChatGPT 5
+> **README.md** generated with **NotebookLM** + **ChatGPT 5**
 
 An AI-driven **cover letter generator** built with **FastAPI**, designed to help users create tailored cover letters by indexing their resumes and applying to job listings.  
 
-The system integrates **resume processing, job listing parsing, vector search, LLM-based text generation, PDF rendering, authentication, and rate limiting**—all packaged in a scalable Dockerized application.
+The system integrates **RAG and LLM-based cover letter generation, PDF rendering, authentication, and rate limiting**—all packaged in a scalable Dockerized application.
 
 ---
 
@@ -29,7 +29,7 @@ The system integrates **resume processing, job listing parsing, vector search, L
 - **Server**: Uvicorn  
 - **Language**: Python 3.11-slim  
 - **Dependencies**: `requests`, `openai`, `pypdf`, `bs4`, `faiss-cpu`, `weasyprint`, `jinja2`, `boto3`, `pyjwt`  
-- **Embedding Model**: External embedder (`EMBEDDER_URL`) via Docker service `dmr_embedder_model` → `hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M`  
+- **Embedding Model**: nomic-embed-text-v1.5 - GGUF **ran with Docker Model Runner** (`hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M`)
 - **LLM**: Gemini API (`gemini-2.5-pro`)  
 - **Vector DB**: FAISS  
 - **Storage**: AWS S3 (`resume-storage-ostew5`)  
@@ -53,11 +53,12 @@ The system integrates **resume processing, job listing parsing, vector search, L
 ## 📦 Deployment
 
 1. Clone repo & set up `.env` with required secrets:  
-   - `EMBEDDER_URL`, `EMBEDDER_ID`  
    - `GEMINI_API_KEY`  
    - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`  
    - `JWT_SECRET`
 
 2. Build & run with Docker Compose:
    ```bash
+   docker compose up --build
+   ```
    docker-compose up --build
