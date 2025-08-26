@@ -9,13 +9,14 @@ and starts a background job to generate a cover letter.
 - GET /generate_cover_letter/result/{job_id}: Returns the generated cover letter.
 """
 
-from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
 import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
+from pyapp.helpers.user_authentication import authenticate, rate_limiter
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from fastapi.responses import StreamingResponse
 from bs4 import BeautifulSoup
 from weasyprint import HTML
 from datetime import date
-from fastapi.responses import StreamingResponse
 from io import BytesIO
 import numpy as np
 
@@ -297,12 +298,14 @@ def generate_cover_letter(
     except Exception as e:
         _set_status(app, job_id, status=f"Failed at {app.state.cover_letter_jobs[job_id]} with error: {str(e)}")
 
-@router.post("/start")
-async def generate_cover_letter_endpoint(
+@router.put("/start")
+async def start_generate_cover_letter_job(
     background_tasks: BackgroundTasks,
     request: Request,
     job_listing_url: str = Query(..., description="URL of the LinkedIn job listing"),
-    file_id: str = Query(..., description="Indexed resume uuid")
+    file_id: str = Query(..., description="Indexed resume uuid"),
+    user: dict = Depends(authenticate),
+    _ = Depends(rate_limiter("cover_letter"))
 ):
     job_listing_url = job_listing_url.strip()
     file_id = file_id.strip()
@@ -350,7 +353,7 @@ async def generate_cover_letter_endpoint(
     }
 
 @router.get("/status/{job_id}")
-def status(job_id: str, request: Request):
+def get_cover_letter_job_status(job_id: str, request: Request):
     if not hasattr(request.app.state, "cover_letter_jobs"):
         raise HTTPException(status_code=404, detail="No jobs found")
 
@@ -362,7 +365,7 @@ def status(job_id: str, request: Request):
     return {"uuid": job_id, **job}
 
 @router.get("/result/{job_id}")
-def status(job_id: str, request: Request):    
+def get_generated_cover_letter(job_id: str, request: Request):    
     pdf_io = BytesIO()
 
     try:

@@ -1,0 +1,10 @@
+{
+    "index_resume": {
+        "basic": 1,
+        "premium": 3
+    },
+    "cover_letter": {
+        "basic": 1,
+        "premium": 9999
+    }
+}
