@@ -2,6 +2,8 @@ from fastapi import FastAPI, File, Query, HTTPException
 import os, openai, boto3
 
 EMBEDDER_URL = os.getenv("EMBEDDER_URL")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+S3_REGION = os.getenv("S3_REGION")
 
 app = FastAPI(title="Mart - Cover Letter Generator")
 
@@ -26,7 +28,7 @@ async def initialise():
     print("Setting up S3 client for resume storage...")
     try:
         s3 = boto3.client("s3")
-        s3.create_bucket(Bucket="resume-storage-ostew5", CreateBucketConfiguration={'LocationConstraint': 'ap-southeast-2'})
+        s3.create_bucket(Bucket=S3_BUCKET_NAME, CreateBucketConfiguration={'LocationConstraint': S3_REGION})
     except s3.exceptions.BucketAlreadyExists:
         print("Bucket already exists, continuing...")
     except Exception as e:
