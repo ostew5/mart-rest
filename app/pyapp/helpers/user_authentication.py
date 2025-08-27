@@ -62,7 +62,7 @@ def rate_limiter(request_type: str):
         if len(requests_list) >= limit:
             raise HTTPException(status_code=403, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
 
-        app.state.users[user["uuid"]]["requests"][request_type] = requests_list
+        request.app.state.users[user["uuid"]]["requests"][request_type] = requests_list
 
         return lambda: tick_rate_limiter(request.app, user, request_type)
 
