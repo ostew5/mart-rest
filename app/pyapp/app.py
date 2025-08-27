@@ -5,7 +5,7 @@ EMBEDDER_URL = os.getenv("EMBEDDER_URL")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 S3_REGION = os.getenv("S3_REGION")
 
-app = FastAPI(title="Mart - Cover Letter Generator")
+app = FastAPI(title="Mart - RAG & LLM Powered Cover Letter Generator")
 
 from pyapp.routers.generate_cover_letter import router as generate_cover_letter_router
 from pyapp.routers.index_resume import router as index_resume_router

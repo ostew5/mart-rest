@@ -1,6 +1,6 @@
-# Mart - Cover Letter Generator
+# Mart - RAG & LLM Powered Cover Letter Generator
 
-A RAG and LLM powered REST API that automates the process of **indexing resumes** and **generating tailored cover letters** based on job listings.  
+A RAG & LLM powered REST API that automates the process of scraping a job description, matching the job description to relevant sections of an applicant's resume and generating a complete, formatted and rendered pdf cover letter for the applicant.
 Built with **FastAPI**, **FAISS**, **S3 storage**, **Docker Model Runner**, and the **Gemini API**, it provides an end-to-end pipeline with authentication, subscription-based rate limiting, and PDF generation.
 
 ---
