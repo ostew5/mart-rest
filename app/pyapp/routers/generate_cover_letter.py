@@ -10,8 +10,8 @@ and starts a background job to generate a cover letter.
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
-import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
 from pyapp.helpers.user_authentication import authenticate, rate_limiter
+import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from fastapi.responses import StreamingResponse
 from bs4 import BeautifulSoup
@@ -306,7 +306,7 @@ async def start_generate_cover_letter_job(
     job_listing_url: str = Query(..., description="URL of the LinkedIn job listing"),
     file_id: str = Query(..., description="Indexed resume uuid"),
     user: dict = Depends(authenticate),
-    _ = Depends(rate_limiter("cover_letter"))
+    tick_rate_limiter = Depends(rate_limiter("cover_letter"))
 ):
     job_listing_url = job_listing_url.strip()
     file_id = file_id.strip()
@@ -347,6 +347,8 @@ async def start_generate_cover_letter_job(
         background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Indexed resume with id: {file_id} not found: {str(e)}")
+
+    tick_rate_limiter()
 
     return {
         "uuid": job_id,

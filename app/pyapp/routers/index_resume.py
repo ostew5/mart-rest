@@ -194,7 +194,7 @@ async def start_resume_indexing_job(
     background_tasks: BackgroundTasks,
     request: Request,
     user: dict = Depends(authenticate),
-    _ = Depends(rate_limiter("index_resume"))
+    tick_rate_limiter = Depends(rate_limiter("index_resume"))
 ):
     # Check file size
     if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
@@ -209,6 +209,8 @@ async def start_resume_indexing_job(
     text = _read_pdf(file)
 
     background_tasks.add_task(index_resume, text, job_id, request.app)
+
+    tick_rate_limiter()
 
     return {
         "uuid": job_id,

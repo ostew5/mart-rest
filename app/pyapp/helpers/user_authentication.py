@@ -62,9 +62,15 @@ def rate_limiter(request_type: str):
         if len(requests_list) >= limit:
             raise HTTPException(status_code=403, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
 
-        requests_list.append(datetime.utcnow() + timedelta(hours=1))
-        request.app.state.users[user["uuid"]]["requests"][request_type] = requests_list
+        app.state.users[user["uuid"]]["requests"][request_type] = requests_list
 
-        return None
+        return lambda: tick_rate_limiter(request.app, user, request_type)
 
     return _rate_limit
+
+def tick_rate_limiter(
+    app: FastAPI,
+    user: dict,
+    request_type: dict
+):
+    return app.state.users[user["uuid"]]["requests"][request_type].append(datetime.utcnow() + timedelta(hours=1))
