@@ -17,6 +17,7 @@ import numpy as np
 router = APIRouter(prefix="/index_resume", tags=["index_resume"])
 
 EMBEDDER_ID = os.getenv("EMBEDDER_ID")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 def _read_pdf(file: UploadFile) -> str:
 # Read the PDF file
@@ -170,12 +171,12 @@ def index_resume(
         
         app.state.s3.upload_fileobj(
             buffer,
-            "resume-storage-ostew5", 
+            S3_BUCKET_NAME,
             f"resumes/{job_id}.pkl"
         )
 
         app.state.s3.put_object(
-            Bucket="resume-storage-ostew5", 
+            Bucket=S3_BUCKET_NAME, 
             Key=f"resumes/{job_id}.bin", 
             Body=blob,
             ContentType="application/json", 

@@ -28,7 +28,8 @@ env = Environment(
 router = APIRouter(prefix="/generate_cover_letter", tags=["generate_cover_letter"])
 
 EMBEDDER_ID = os.getenv("EMBEDDER_ID")
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def _deserialize_faiss(index):
@@ -287,7 +288,7 @@ def generate_cover_letter(
 
         _set_status(app, job_id, status="Uploading to s3")
         app.state.s3.put_object(
-            Bucket="resume-storage-ostew5", 
+            Bucket=S3_BUCKET_NAME, 
             Key=f"cover_letters/{job_id}.pdf", 
             Body=pdf_bytes,
             ContentType="application/pdf"
@@ -318,7 +319,7 @@ async def start_generate_cover_letter_job(
     try:
         index_data = BytesIO()
         boto_resp = request.app.state.s3.download_fileobj(
-            "resume-storage-ostew5", 
+            S3_BUCKET_NAME, 
             f"resumes/{file_id}.pkl",
             index_data
         )
@@ -326,7 +327,7 @@ async def start_generate_cover_letter_job(
         index_data.seek(0)
 
         boto_resp = request.app.state.s3.get_object(
-            Bucket="resume-storage-ostew5", 
+            Bucket=S3_BUCKET_NAME, 
             Key=f"resumes/{file_id}.bin"
         )
 
@@ -370,7 +371,7 @@ def get_generated_cover_letter(job_id: str, request: Request):
 
     try:
         boto_resp = request.app.state.s3.download_fileobj(
-            "resume-storage-ostew5", 
+            S3_BUCKET_NAME, 
             f"cover_letters/{job_id}.pdf",
             pdf_io
         )
