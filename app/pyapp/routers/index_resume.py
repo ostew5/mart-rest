@@ -8,7 +8,7 @@ It contains the endpoints:
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
-from pyapp.helpers.user_authentication import authenticate, rate_limiter
+from pyapp.helpers.user_authentication import authenticate, rate_limiter, get_subscription_limits
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
 from pypdf import PdfReader
 from io import BytesIO
@@ -195,8 +195,8 @@ async def start_resume_indexing_job(
     user: dict = Depends(authenticate),
     _ = Depends(rate_limiter("index_resume"))
 ):
-    # Check file size (require PDF to be less than 25MB)
-    if file.size > 25 * 1024 * 1024:
+    # Check file size
+    if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
         raise HTTPException(status_code=413, detail="File too large")
 
     # Quick PDF signature check

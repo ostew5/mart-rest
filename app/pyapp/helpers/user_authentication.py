@@ -16,12 +16,8 @@ def authenticate(
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         payload["subscription_level"] = request.app.state.users[payload["uuid"]]["subscription_level"]
         return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Exception hit: {e}")
+        raise HTTPException(status_code=401, detail=f"Failed to authenticate user: {e}")
 
 def generate_jwt(uuid):
     expiration = datetime.utcnow() + timedelta(hours=1)
@@ -36,6 +32,13 @@ def generate_jwt(uuid):
         JWT_SECRET, 
         algorithm="HS256"
     )
+
+def get_subscription_limits():
+    try:
+        with open("pyapp/helpers/subscription-limits.json", "r") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Couldn't get rate limits due to Exception: {e}")
 
 def rate_limiter(request_type: str):
     if request_type not in ["index_resume", "cover_letter"]:
@@ -54,13 +57,7 @@ def rate_limiter(request_type: str):
 
         requests_list = [r for r in requests_list if r > now]
 
-        try:
-            with open("pyapp/helpers/rate-limits.json", "r") as f:
-                rate_limits = json.load(f)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Couldn't get rate limits due to Exception: {e}")
-
-        limit = rate_limits[request_type][user["subscription_level"]]
+        limit = get_subscription_limits()["requests_per_hour"][request_type][user["subscription_level"]]
 
         if len(requests_list) >= limit:
             raise HTTPException(status_code=403, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
