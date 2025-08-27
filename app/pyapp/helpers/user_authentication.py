@@ -64,7 +64,7 @@ def rate_limiter(request_type: str):
 
         _1hour = datetime.utcnow() + timedelta(hours=1)
 
-        app.state.users[user["uuid"]]["requests"][request_type].append(_1hour)
+        requests_list.append(_1hour)
 
         request.app.state.users[user["uuid"]]["requests"][request_type] = requests_list
 
