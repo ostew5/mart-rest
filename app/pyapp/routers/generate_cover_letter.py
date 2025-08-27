@@ -243,7 +243,7 @@ def generate_cover_letter(
     job_listing_text: str,
     job_id: str,
     app: FastAPI,
-    tick_rate_limiter: lambda
+    tick_rate_limiter
 ):
     try:
         index = bundle["index"]

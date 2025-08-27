@@ -136,7 +136,7 @@ def index_resume(
     text: str,
     job_id: str,
     app: FastAPI,
-    tick_rate_limiter: lambda
+    tick_rate_limiter
 ):
     try:
         _set_status(app, job_id, status="Marking newlines")
