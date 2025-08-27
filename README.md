@@ -64,8 +64,6 @@ Built with **FastAPI**, **FAISS**, **S3 storage**, **Docker Model Runner**, and 
 ### Environment Variables (`.env`)
 | Variable | Description |
 |----------|-------------|
-| `EMBEDDER_URL` | Embedder service endpoint |
-| `EMBEDDER_ID` | Embedder model ID |
 | `GEMINI_API_URL` | Gemini API endpoint |
 | `GEMINI_API_KEY` | Gemini API key |
 | `S3_BUCKET_NAME` | AWS S3 bucket |
