@@ -1,76 +1,143 @@
-# Mart - AI-Powered Cover Letter Generator
+# Mart - Cover Letter Generator
 
-> **README.md** generated with **NotebookLM** + **ChatGPT 5**
-
-An AI-driven **cover letter generator** built with **FastAPI**, designed to help users create tailored cover letters by indexing their resumes and applying to job listings.  
-
-The system integrates **RAG and LLM-based cover letter generation, PDF rendering, authentication, and rate limiting**—all packaged in a scalable Dockerized application.
+A RAG and LLM powered REST API that automates the process of **indexing resumes** and **generating tailored cover letters** based on job listings.  
+Built with **FastAPI**, **FAISS**, **S3 storage**, **Docker Model Runner**, and the **Gemini API**, it provides an end-to-end pipeline with authentication, subscription-based rate limiting, and PDF generation.
 
 ---
 
 ## 🚀 Features
 
-### 🔑 Core Functionality
-- **Resume Indexing** (`/index_resume`)  
-  Upload a PDF resume → extract text → chunk + embed → store in **FAISS index** → persist to **AWS S3** (`resume-storage-ostew5`) → runs as **background task**.
-  
-- **Cover Letter Generation** (`/generate_cover_letter`)  
-  Input job listing URL + resume UUID → fetch & parse listing via **BeautifulSoup** + `job-listing-selectors.json` → retrieve relevant resume chunks from FAISS → construct prompt → generate letter via **Gemini API (gemini-2.5-pro)** → render to PDF with **Jinja2 + Weasyprint** → upload to **S3** → runs as **background task**.
-  
-- **Job Management**  
-  - Status: `/index_resume/status/{job_id}`, `/generate_cover_letter/status/{job_id}`  
-  - Result: `/generate_cover_letter/result/{job_id}` (PDF download)
+### Resume Indexing (`/index_resume`)
+- Upload PDF resumes.
+- Extract and clean text (normalize bullets, spaces, newlines).
+- Chunk text with overlaps for better context.
+- Generate embeddings with a configurable model.
+- Store embeddings in a **FAISS index** and persist to **S3**.
+- Track job status and enforce **subscription-based file size/limits**.
+
+### Cover Letter Generation (`/generate_cover_letter`)
+- Provide a **LinkedIn job listing URL** + resume ID.
+- Scrape job details (title, company, location, description).
+- Retrieve relevant resume info via FAISS similarity search.
+- Build a structured prompt for the **Gemini API**.
+- Generate JSON-based cover letter content.
+- Render PDF using **Jinja2** + **WeasyPrint** template.
+- Upload PDF to **S3** and allow retrieval.
+- Enforce **rate limits** per subscription level.
+
+### User Management (`/user`)
+- `/login` with UUID + passkey → returns JWT.
+- Subscription levels:
+  - **Basic**: stricter limits.
+  - **Premium**: higher request/file size limits.
 
 ---
 
-## 🛠️ Technical Stack
+## 🛠️ Tech Stack
 
-- **Framework**: FastAPI  
-- **Server**: Uvicorn  
-- **Language**: Python 3.11-slim  
-- **Dependencies**: `requests`, `openai`, `pypdf`, `bs4`, `faiss-cpu`, `weasyprint`, `jinja2`, `boto3`, `pyjwt`  
-- **Embedding Model**: nomic-embed-text-v1.5 - GGUF **ran with Docker Model Runner** (`hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M`)
-- **LLM**: Gemini API (`gemini-2.5-pro`)  
-- **Vector DB**: FAISS  
-- **Storage**: AWS S3 (`resume-storage-ostew5`)  
-- **PDF Generation**: Jinja2 + Weasyprint  
-- **Containerization**: Docker (`Dockerfile`)  
-- **Orchestration**: Docker Compose (`docker-compose.yml`)  
-- **Config Management**: Environment variables (`.env` excluded from VCS)
+- **FastAPI** – API framework  
+- **FAISS** – vector similarity search  
+- **S3 (boto3)** – resume & letter storage
+- **Docker Model Runner** – Embedding model for RAG
+- **Gemini API** – LLM cover letter generation  
+- **WeasyPrint + Jinja2** – PDF rendering  
+- **JWT** – authentication  
+- **Docker & Docker Compose** – containerization  
 
 ---
 
-## 🔒 User Management & Security
+## 📦 Requirements
 
-- **Authentication**: `/user/login` with `uuid` + `passkey` → JWT token  
-- **Protected Endpoints**: `/index_resume/upload`, `/generate_cover_letter/start` require JWT  
-- **Subscriptions**: `basic` & `premium` tiers  
-- **Rate Limiting**: Defined in `rate-limits.json` per tier + request type  
-  - Example: `basic` → 1 resume + 1 cover letter / hour
+- **Docker & Docker Compose**
+- **Python 3.11 (slim base image)** with system dependencies:
+  - `libcairo2`, `libpango-1.0-0`, `libgdk-pixbuf-2.0-0`, `libglib2.0-0`,  
+    `libharfbuzz0b`, `libfribidi0`, `libffi8`, `libxml2`, `libxslt1.1`,  
+    `libjpeg62-turbo`, `zlib1g`, `fontconfig`, `fonts-dejavu-core`
+- **Python packages** (see `requirements.txt`):
+  - `fastapi`, `uvicorn`, `requests`, `openai`, `pypdf`, `python-multipart`,  
+    `beautifulsoup4`, `faiss-cpu`, `weasyprint`, `jinja2`, `boto3`, `pyjwt`
 
 ---
 
-## 📦 Deployment
+## ⚙️ Configuration
 
-1. Clone repo & set up `.env` with required secrets:  
-   - `GEMINI_API_KEY`  
-   - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`  
-   - `JWT_SECRET`
+### Environment Variables (`.env`)
+| Variable | Description |
+|----------|-------------|
+| `EMBEDDER_URL` | Embedder service endpoint |
+| `EMBEDDER_ID` | Embedder model ID |
+| `GEMINI_API_URL` | Gemini API endpoint |
+| `GEMINI_API_KEY` | Gemini API key |
+| `S3_BUCKET_NAME` | AWS S3 bucket |
+| `S3_REGION` | AWS region |
+| `AWS_ACCESS_KEY_ID` | AWS key |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret |
+| `JWT_SECRET` | Secret for signing JWTs |
 
-2. Build & run with Docker Compose:
-   ```bash
-   docker compose up --build
-   ```
+---
 
-3. (Maybe) you will need a version of Docker with Model Runner, run:
+## 📂 Project Structure
 
-   ```bash
-   sudo apt-get update && sudo apt-get upgrade -y
-   sudo apt-get install ca-certificates curl gnupg lsb-release -y
-   sudo mkdir -p /etc/apt/keyrings
-   curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-   echo \
-   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-   sudo usermod -aG docker $USER
-   ``` 
+pyapp/
+├── main.py                  # FastAPI entrypoint
+├── templates/letter.html    # Cover letter template
+├── job-listing-selectors.json
+├── helpers/subscription-limits.json
+└── ... (resume + letter logic)
+fonts/
+└── \*.ttf
+requirements.txt
+docker-compose.yml
+
+---
+
+## ▶️ Running Locally
+
+```bash
+# Build and start
+docker-compose up --build
+````
+
+You may need to install a version of Docker with Docker Model Runner:
+
+```bash
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install ca-certificates curl gnupg lsb-release -y
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo usermod -aG docker $USER
+```
+
+App runs at: [http://localhost:8080](http://localhost:8080)
+
+---
+
+## 🔑 Authentication
+
+* **Login:**
+  `POST /user/login` with `{ "uuid": "...", "passkey": "..." }`
+  → returns a JWT for authenticated requests.
+
+* Pre-configured users exist for testing (`basic`, `premium`).
+
+---
+
+## 📖 API Overview
+
+* **POST /index\_resume** → upload and index a resume PDF
+* **GET /index\_resume/{id}/status** → check indexing status
+* **POST /generate\_cover\_letter** → generate cover letter from job URL + resume ID
+* **GET /generate\_cover\_letter/{id}/status** → check generation status
+* **GET /generate\_cover\_letter/{id}/pdf** → retrieve generated cover letter PDF
+* **POST /user/login** → user login (JWT)
+
+---
+
+## 📜 License
+
+MIT License – feel free to use, modify, and distribute.
+
+---
