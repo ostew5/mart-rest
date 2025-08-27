@@ -242,7 +242,8 @@ def generate_cover_letter(
     bundle: dict,
     job_listing_text: str,
     job_id: str,
-    app: FastAPI
+    app: FastAPI,
+    tick_rate_limiter: lambda
 ):
     try:
         index = bundle["index"]
@@ -295,9 +296,11 @@ def generate_cover_letter(
         )
 
         _set_status(app, job_id, status="Completed!")
+        tick_rate_limiter(True)
         return job_id
     except Exception as e:
         _set_status(app, job_id, status=f"Failed at {app.state.cover_letter_jobs[job_id]} with error: {str(e)}")
+        tick_rate_limiter(False)
 
 @router.put("/start")
 async def start_generate_cover_letter_job(
@@ -314,6 +317,7 @@ async def start_generate_cover_letter_job(
     job_listing = requests.get(job_listing_url, timeout = 5)
 
     if job_listing.status_code != 200:
+        tick_rate_limiter(False)
         raise HTTPException(status_code=404, detail="Job listing not found")
 
     try:
@@ -344,11 +348,10 @@ async def start_generate_cover_letter_job(
 
         job_id = str(uuid.uuid4())
 
-        background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app)
+        background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app, tick_rate_limiter)
     except Exception as e:
+        tick_rate_limiter(False)
         raise HTTPException(status_code=404, detail=f"Indexed resume with id: {file_id} not found: {str(e)}")
-
-    tick_rate_limiter()
 
     return {
         "uuid": job_id,

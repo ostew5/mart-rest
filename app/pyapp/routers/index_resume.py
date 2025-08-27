@@ -135,7 +135,8 @@ def _set_status(app, job_id: str, status: str):
 def index_resume(
     text: str,
     job_id: str,
-    app: FastAPI
+    app: FastAPI,
+    tick_rate_limiter: lambda
 ):
     try:
         _set_status(app, job_id, status="Marking newlines")
@@ -184,9 +185,11 @@ def index_resume(
         )
 
         _set_status(app, job_id, status="Completed!")
+        tick_rate_limiter(True)
         return job_id
     except Exception as e:
         _set_status(app, job_id, status=f"Failed with error: {str(e)}")
+        tick_rate_limiter(False)
 
 @router.post("/upload")
 async def start_resume_indexing_job(
@@ -198,19 +201,19 @@ async def start_resume_indexing_job(
 ):
     # Check file size
     if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
+        tick_rate_limiter(False)
         raise HTTPException(status_code=413, detail="File too large")
 
     # Quick PDF signature check
     if not file.file.read(5) == b"%PDF-":
+        tick_rate_limiter(False)
         raise HTTPException(status_code=400, detail="Not a valid PDF")
 
     job_id = str(uuid.uuid4())
 
     text = _read_pdf(file)
 
-    background_tasks.add_task(index_resume, text, job_id, request.app)
-
-    tick_rate_limiter()
+    background_tasks.add_task(index_resume, text, job_id, request.app, tick_rate_limiter)
 
     return {
         "uuid": job_id,
