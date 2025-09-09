@@ -1,20 +1,57 @@
+networks:
+  internal_net:
+    internal: true
+  public_net: {}
+
+volumes:
+  llama-cache:
+
 services:
   api:
-    build: ./app
-    models:
-      dmr_embedder_model:
-        endpoint_var: EMBEDDER_URL
-        model_var: EMBEDDER_ID
+    build: ./backend
     environment:
-      PORT: "8080"
       GEMINI_API_URL: ${GEMINI_API_URL}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       S3_REGION: ${S3_REGION}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       JWT_SECRET: ${JWT_SECRET}
+      EMBEDDER_URL: "http://llama-embedder:8080"
+      EMBEDDER_ID: "/models/embeddinggemma-300MF32.gguf"
+    volumes:
+      - ./resources:/app_v1/resources
     ports:
       - "8080:8080"
+    depends_on:
+      - llama-embedder
+    restart: unless-stopped
+    networks:
+      - internal_net
+      - public_net
 
-models:
-  dmr_embedder_model:
-    model: hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M
+  llama-embedder:
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    container_name: llama-embedder
+    command: >
+      -m /models/embeddinggemma-300M-F32.gguf
+      -ngl 999
+      --embedding
+      --host 0.0.0.0
+      --port 8080
+      -c 4096
+    environment:
+      - GGML_VK_VISIBLE_DEVICES=0
+      - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
+    volumes:
+      - ./models:/models:ro
+      - llama-cache:/root/.cache
+    devices:
+      - /dev/dri:/dev/dri
+    security_opt:
+      - seccomp=unconfined
+    expose:
+      - "8080"
+    restart: unless-stopped
+    networks:
+      - internal_net

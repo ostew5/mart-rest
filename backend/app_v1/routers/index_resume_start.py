@@ -1,20 +1,20 @@
 """
-This is the /index_resume POST endpoint for indexing applicant 
+This is the /v1/index_resume POST endpoint for indexing applicant 
 resumes and storing them in a S3 bucket.
 
-It contains the endpoints:
-- POST /index_resume/upload: Accepts a PDF file, processes it, and starts a background job to index the resume.
-- GET /index_resume/status/{job_id}: Returns the status of the indexing job.
+It contains the endpoint:
+- POST /v1/index_resume/upload: Accepts a PDF file, processes it, and starts a background job to index the resume.
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
-from pyapp.helpers.user_authentication import authenticate, rate_limiter, get_subscription_limits
+from app_v1.helpers.user_authentication import authenticate, rate_limiter, get_subscription_limits
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
+from fastapi.responses import JSONResponse
 from pypdf import PdfReader
 from io import BytesIO
 import numpy as np
 
-router = APIRouter(prefix="/index_resume", tags=["index_resume"])
+router = APIRouter(prefix="/v1/index_resume", tags=["index_resume"])
 
 EMBEDDER_ID = os.getenv("EMBEDDER_ID")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
@@ -188,10 +188,40 @@ def index_resume(
         tick_rate_limiter(True)
         return job_id
     except Exception as e:
-        _set_status(app, job_id, status=f"Failed with error: {str(e)}")
+        _set_status(app, job_id, status=f"Failed at {app.state.index_jobs[job_id]} with error: {str(e)}")
         tick_rate_limiter(False)
 
-@router.post("/upload")
+@router.post(
+    "/start",
+    summary="Start resume indexing job",
+    description="""
+Begin an asynchronous job to index an uploaded resume PDF and store the artifacts in S3.
+
+**What it does**
+- Validates the uploaded file:
+  - Checks size against `get_subscription_limits()["max_resume_size"][user["subscription_level"]]`.
+  - Verifies the file starts with the PDF signature `%PDF-`.
+- Extracts text from the PDF and enqueues `index_resume` as a background task.
+- Background task cleans/segments text, creates overlapping chunks, generates embeddings, builds a FAISS index, and uploads:
+  - `resumes/{job_id}.pkl` — serialized FAISS index
+  - `resumes/{job_id}.bin` — gzip-compressed JSON bundle of chunks & metadata
+- Tracks progress in `app.state.index_jobs`.
+
+**Form data**
+- `file` *(UploadFile, required)* — The PDF resume to index.
+
+**Dependencies**
+- `authenticate` — Requires a valid authenticated user.
+- `rate_limiter("index_resume")` — Applies per-user rate limits.
+
+**Responses**
+- `202 Accepted` — Returns `{"uuid": "<job-id>", "message": "Resume indexing job started in the background"}`.
+- `413 Payload Too Large` — If the file exceeds the allowed size for the user's subscription.
+- `400 Bad Request` — If the file is not a valid PDF (fails signature check).
+- `401 Unauthorized` — If authentication fails (from dependency).
+- `429 Too Many Requests` — If rate limiting is triggered (from dependency).
+"""
+)
 async def start_resume_indexing_job(
     file: UploadFile,
     background_tasks: BackgroundTasks,
@@ -215,17 +245,10 @@ async def start_resume_indexing_job(
 
     background_tasks.add_task(index_resume, text, job_id, request.app, tick_rate_limiter)
 
-    return {
-        "uuid": job_id,
-        "message": "Resume indexing job started in the background"
-    }
-
-@router.get("/status/{job_id}")
-def get_resume_indexing_job_status(job_id: str, request: Request):
-    app = request.app
-    if not hasattr(app.state, "index_jobs"):
-        raise HTTPException(status_code=404, detail="No jobs found")
-    job = app.state.index_jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return {"uuid": job_id, **job}
+    return JSONResponse(
+        {
+            "uuid": job_id,
+            "message": "Resume indexing job started in the background"
+        },
+        status_code=202
+    )

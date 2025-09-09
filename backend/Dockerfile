@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fontconfig fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /app_v1
 COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY pyapp/ pyapp/
+COPY app_v1/ app_v1/
 
 COPY fonts/*.ttf /usr/local/share/fonts/
 RUN fc-cache -f -v
@@ -20,4 +20,4 @@ RUN fc-cache -f -v
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["uvicorn", "pyapp.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app_v1.app:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -7,16 +7,35 @@ It contains the endpoints:
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request
-from pyapp.helpers.user_authentication import generate_jwt
+from app_v1.helpers.user_authentication import generate_jwt
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/user", tags=["user"])
+router = APIRouter(prefix="/v1/user", tags=["user"])
 
 class Login(BaseModel):
     uuid: str
     passkey: str
 
-@router.post("/login")
+@router.post(
+    "/login",
+    summary="User login and JWT token generation",
+    description="""
+Authenticate a user and issue a JWT token.
+
+**What it does**
+- Looks up the user in `app.state.users` using the provided `uuid`.
+- Verifies the `passkey` against the stored value.
+- If valid, generates and returns a JWT token for the user.
+
+**Request body**
+- `uuid` *(str, required)* — The user's unique identifier.
+- `passkey` *(str, required)* — The user's authentication secret.
+
+**Responses**
+- `200 OK` — Returns `{"token": "<jwt-token>"}` on successful authentication.
+- `401 Unauthorized` — If the user is not found or the `passkey` is invalid.
+"""
+)
 def login(
     login: Login,
     request: Request

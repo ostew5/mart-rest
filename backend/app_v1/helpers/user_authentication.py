@@ -35,7 +35,7 @@ def generate_jwt(uuid):
 
 def get_subscription_limits():
     try:
-        with open("pyapp/helpers/subscription-limits.json", "r") as f:
+        with open("resources/subscription-limits.json", "r") as f:
             return json.load(f)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Couldn't get rate limits due to Exception: {e}")
@@ -60,7 +60,7 @@ def rate_limiter(request_type: str):
         limit = get_subscription_limits()["requests_per_hour"][request_type][user["subscription_level"]]
 
         if len(requests_list) >= limit:
-            raise HTTPException(status_code=403, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
+            raise HTTPException(status_code=429, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
 
         _1hour = datetime.utcnow() + timedelta(hours=1)
 

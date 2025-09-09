@@ -5,14 +5,25 @@ EMBEDDER_URL = os.getenv("EMBEDDER_URL")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 S3_REGION = os.getenv("S3_REGION")
 
-app = FastAPI(title="Mart - RAG & LLM Powered Cover Letter Generator")
+app = FastAPI(
+    title="Mart - LLM & RAG Powered Cover Letter Generator",
+    docs_url="/v1/docs",
+    redoc_url="/v1/redoc",
+    openapi_url="/v1/openapi.json"
+)
 
-from pyapp.routers.generate_cover_letter import router as generate_cover_letter_router
-from pyapp.routers.index_resume import router as index_resume_router
-from pyapp.routers.user import router as user_router
+from app_v1.routers.cover_letter_result import router as cover_letter_result_router
+from app_v1.routers.cover_letter_start import router as cover_letter_start_router
+from app_v1.routers.cover_letter_status import router as cover_letter_status_router
+from app_v1.routers.index_resume_start import router as index_resume_start_router
+from app_v1.routers.index_resume_status import router as index_resume_status_router
+from app_v1.routers.user import router as user_router
 
-app.include_router(index_resume_router)
-app.include_router(generate_cover_letter_router)
+app.include_router(cover_letter_result_router)
+app.include_router(cover_letter_start_router)
+app.include_router(cover_letter_status_router)
+app.include_router(index_resume_start_router)
+app.include_router(index_resume_status_router)
 app.include_router(user_router)
 
 @app.on_event("startup")

@@ -1,19 +1,17 @@
 """
-This is the /generate_cover_letter endpoint route 
+This is the /v1/generate_cover_letter endpoint route 
 for generating a cover letter based on a job listing and a resume.
 
 It contains the endpoint:
-- POST /generate_cover_letter/start: Accepts a job listing URL and the indexed resume name
+- POST /v1/generate_cover_letter/start: Accepts a job listing URL and the indexed resume name
 and starts a background job to generate a cover letter.
-- GET /generate_cover_letter/status/{job_id}: Returns the status of the cover letter generation.
-- GET /generate_cover_letter/result/{job_id}: Returns the generated cover letter.
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
-from pyapp.helpers.user_authentication import authenticate, rate_limiter
+from app_v1.helpers.user_authentication import authenticate, rate_limiter
 import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from bs4 import BeautifulSoup
 from weasyprint import HTML
 from datetime import date
@@ -21,11 +19,11 @@ from io import BytesIO
 import numpy as np
 
 env = Environment(
-    loader=FileSystemLoader("pyapp/templates"),
+    loader=FileSystemLoader("resources"),
     autoescape=select_autoescape(["html", "xml"])
 )
 
-router = APIRouter(prefix="/generate_cover_letter", tags=["generate_cover_letter"])
+router = APIRouter(prefix="/v1/generate_cover_letter", tags=["generate_cover_letter"])
 
 EMBEDDER_ID = os.getenv("EMBEDDER_ID")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
@@ -37,7 +35,7 @@ def _deserialize_faiss(index):
     return faiss.deserialize_index(ready)
 
 def _load_selectors():
-    with open("pyapp/job-listing-selectors.json", "r") as f:
+    with open("resources/job-listing-selectors.json", "r") as f:
         selectors = json.load(f)
         if selectors:
             return selectors
@@ -302,7 +300,33 @@ def generate_cover_letter(
         _set_status(app, job_id, status=f"Failed at {app.state.cover_letter_jobs[job_id]} with error: {str(e)}")
         tick_rate_limiter(False)
 
-@router.put("/start")
+@router.put(
+    "/start",
+    summary="Start cover-letter generation job",
+    description="""
+Begin an asynchronous job to generate a tailored cover letter from a LinkedIn job listing and an indexed resume.
+
+**What it does**
+- Validates the `job_listing_url` is reachable (`200 OK`) and fetches the HTML.
+- Downloads the FAISS index (`.pkl`) and resume bundle (`.bin`) from S3 for `file_id`, then decompresses/deserializes them.
+- Creates a new `job_id`, enqueues `generate_cover_letter` as a background task, and records status in `app.state.cover_letter_jobs`.
+- Background task extracts job details, retrieves relevant resume snippets, calls Gemini to create content, renders a PDF, and uploads it to S3.
+
+**Query parameters**
+- `job_listing_url` *(str, required)* — URL of the LinkedIn job listing.
+- `file_id` *(str, required)* — UUID of the previously indexed resume.
+
+**Dependencies**
+- `authenticate` — Requires a valid authenticated user.
+- `rate_limiter("cover_letter")` — Applies per-user rate limits.
+
+**Responses**
+- `202 Accepted` — Returns `{"uuid": "<job-id>", "message": "Resume indexing job started in the background"}`.
+- `404 Not Found` — If the job listing URL is unreachable/non-200, or the indexed resume artifacts (`.pkl`/`.bin`) are missing/invalid.
+- `401 Unauthorized` — If authentication fails (from dependency).
+- `429 Too Many Requests` — If rate limiting is triggered (from dependency).
+"""
+)
 async def start_generate_cover_letter_job(
     background_tasks: BackgroundTasks,
     request: Request,
@@ -353,40 +377,10 @@ async def start_generate_cover_letter_job(
         tick_rate_limiter(False)
         raise HTTPException(status_code=404, detail=f"Indexed resume with id: {file_id} not found: {str(e)}")
 
-    return {
-        "uuid": job_id,
-        "message": "Generate cover letter job started in the background"
-    }
-
-@router.get("/status/{job_id}")
-def get_cover_letter_job_status(job_id: str, request: Request):
-    if not hasattr(request.app.state, "cover_letter_jobs"):
-        raise HTTPException(status_code=404, detail="No jobs found")
-
-    job = request.app.state.cover_letter_jobs.get(job_id)
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    return {"uuid": job_id, **job}
-
-@router.get("/result/{job_id}")
-def get_generated_cover_letter(job_id: str, request: Request):    
-    pdf_io = BytesIO()
-
-    try:
-        boto_resp = request.app.state.s3.download_fileobj(
-            S3_BUCKET_NAME, 
-            f"cover_letters/{job_id}.pdf",
-            pdf_io
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Cover letter PDF not found: {str(e)}")
-
-    pdf_io.seek(0)
-
-    return StreamingResponse(
-        pdf_io,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{job_id}-Cover_Letter.pdf"'}
+    return JSONResponse(
+        {
+            "uuid": job_id,
+            "message": "Resume indexing job started in the background"
+        },
+        status_code=202
     )

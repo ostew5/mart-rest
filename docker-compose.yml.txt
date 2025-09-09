@@ -1,21 +1,21 @@
 services:
   api:
-    build: ./app
+    build: ./backend
     models:
       dmr_embedder_model:
         endpoint_var: EMBEDDER_URL
         model_var: EMBEDDER_ID
     environment:
-      PORT: "8080"
+      PORT: "8000"
       GEMINI_API_URL: ${GEMINI_API_URL}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       S3_REGION: ${S3_REGION}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - ./resources:/v1/resources
     ports:
-      - "8080:8080"
+      - "8000:8000"
 
 models:
   dmr_embedder_model:
