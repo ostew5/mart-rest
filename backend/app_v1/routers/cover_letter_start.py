@@ -9,7 +9,7 @@ and starts a background job to generate a cover letter.
 
 from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
 from app_v1.helpers.user_authentication import authenticate, rate_limiter
-import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re
+import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re, logging
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from fastapi.responses import StreamingResponse, JSONResponse
 from bs4 import BeautifulSoup
@@ -22,6 +22,8 @@ env = Environment(
     loader=FileSystemLoader("resources"),
     autoescape=select_autoescape(["html", "xml"])
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/generate_cover_letter", tags=["generate_cover_letter"])
 
@@ -140,12 +142,12 @@ Sincerely yours,
 """
     return system, prompt
 
-def _get_gemini_response(system, prompt):
+def _get_gemini_response(system: str, prompt: str):
     headers = {
         "Content-Type": "application/json",
         "X-goog-api-key": GEMINI_API_KEY
     }
-
+  
     fields = {
         "letterhead": { "type": "STRING" },
         "date": { "type": "STRING" },
@@ -156,7 +158,7 @@ def _get_gemini_response(system, prompt):
         "closing": { "type": "STRING" },
         "signature": { "type": "STRING" }
     }
-
+  
     payload = {
         "system_instruction": {
             "parts": [
@@ -177,28 +179,60 @@ def _get_gemini_response(system, prompt):
         "generationConfig": {
             "responseMimeType": "application/json",
             "responseSchema": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": fields,
-                "propertyOrdering": list(fields.keys())
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": fields,
+                    "propertyOrdering": list(fields.keys())
                 }
             }
         }
     }
+  
+    try:
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+    except requests.exceptions.HTTPError as http_err:
+        logger.info(f"HTTP error occurred: {http_err}")
+        raise Exception(f"HTTP error occurred: {http_err}")
+    except requests.exceptions.RequestException as req_err:
+        logger.info(f"Request error occurred: {req_err}")
+        raise Exception(f"Request error occurred: {req_err}")
 
-    response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
+    try:
+        response_data = json.loads(response.text)
+    except json.JSONDecodeError as json_err:
+        logger.info(f"JSON decode error: {json_err}")
+        raise Exception(f"JSON decode error: {json_err}")
 
-    text = json.loads(response.text).get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+    candidates = response_data.get("candidates", [])
+    if not candidates:
+        logger.info("No candidates found in the response.")
+        raise ValueError("No candidates found in the response.")
 
-    print(f"INFO:\t\tReceived response: {text}")
+    content_parts = candidates[0].get("content", {}).get("parts", [])
+    if not content_parts:
+        logger.info("No content parts found in the response.")
+        raise ValueError("No content parts found in the response.")
 
+    text = content_parts[0].get("text", "")
+    logger.info(f"Received response: {text}")
+  
+    # Remove code block markers if present
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
+  
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as json_err:
+        logger.info(f"JSON decode error in extracted text: {json_err}")
+        raise ValueError("JSON decode error in extracted text")
 
-    payload = json.loads(text)
     obj = payload[0] if isinstance(payload, list) else payload
-
-    return {k: obj.get(k, "") for k in fields.keys()}
+  
+    # Create a dictionary with default empty strings for each field
+    result = {k: obj.get(k, "") for k in fields.keys()}
+  
+    return result
 
 def _generate_pdf(cover_letter_context):
     html_template = env.get_template("letter.html")
@@ -380,7 +414,7 @@ async def start_generate_cover_letter_job(
     return JSONResponse(
         {
             "uuid": job_id,
-            "message": "Resume indexing job started in the background"
+            "message": "Generate cover letter job started in the background"
         },
         status_code=202
     )

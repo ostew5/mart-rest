@@ -9,6 +9,11 @@ It contains the endpoint:
 from fastapi import HTTPException, Request, APIRouter
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+import os, logging
+
+logger = logging.getLogger(__name__)
+
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 router = APIRouter(prefix="/v1/generate_cover_letter", tags=["generate_cover_letter"])
 
@@ -45,6 +50,7 @@ def get_generated_cover_letter(
             pdf_io
         )
     except Exception as e:
+        logger.error(f"Error getting cover letter PDF: {e}")
         job = request.app.state.cover_letter_jobs.get(job_id)
 
         if not job:

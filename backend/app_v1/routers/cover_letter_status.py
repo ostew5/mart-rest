@@ -29,7 +29,7 @@ Retrieve the current status of a cover-letter generation job.
 """
 )
 def get_cover_letter_job_status(
-    ob_id: str, 
+    job_id: str, 
     request: Request
 ):
     if not hasattr(request.app.state, "cover_letter_jobs"):

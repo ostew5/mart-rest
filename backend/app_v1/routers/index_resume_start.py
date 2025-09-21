@@ -112,7 +112,7 @@ def _overlap_chunks(chunks: list) -> list:
 def _get_embeddings(overlapping_chunks: list, embedder) -> list:
 # Get embeddings for the chunks
     return embedder.embeddings.create(
-        model=EMBEDDER_ID.lower(),
+        model=EMBEDDER_ID,
         input=overlapping_chunks
     )
 

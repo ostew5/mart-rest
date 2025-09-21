@@ -1,9 +1,17 @@
 from fastapi import FastAPI, File, Query, HTTPException
+from pydantic import BaseModel
 import os, openai, boto3
+import logging, requests
 
 EMBEDDER_URL = os.getenv("EMBEDDER_URL")
+EMBEDDER_ID = os.getenv("EMBEDDER_ID")
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 S3_REGION = os.getenv("S3_REGION")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Mart - LLM & RAG Powered Cover Letter Generator",
@@ -26,26 +34,92 @@ app.include_router(index_resume_start_router)
 app.include_router(index_resume_status_router)
 app.include_router(user_router)
 
+class PullModelRequest(BaseModel):
+    model: str
+    insecure: bool = False
+    stream: bool = True
+
 @app.on_event("startup")
 async def initialise():
-    print("Starting app...")
+    logger.info("Starting app...")
 
-    print("Setting up OpenAI client for Embedder connection...")
-    embedder = openai.OpenAI(   
-        base_url = EMBEDDER_URL,
-        api_key = "docker"
+    logger.info(f"Pulling {EMBEDDER_ID} in Ollama...")
+    def handle_stream_response(response):
+        for chunk in response.iter_content(chunk_size=1024):
+            if chunk:
+                try:
+                    data = chunk.decode('utf-8').strip()
+                    if data.startswith("{") and data.endswith("}"):
+                        json_data = requests.compat.json.loads(data)
+                except Exception as e:
+                    logger.error(f"Error processing JSON: {e}")
+
+    try:
+        response = requests.post(f"{EMBEDDER_URL}/api/pull", json={"model": EMBEDDER_ID}, stream=True)
+        response.raise_for_status()
+        handle_stream_response(response)
+    except requests.RequestException as e:
+        logger.error(f"Failed to pull model: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize the application")
+
+    logger.info(f"Verifying model {EMBEDDER_ID} is available...")
+    try:
+        response = requests.get(f"{EMBEDDER_URL}/api/tags")
+        response.raise_for_status()
+        tags = response.json()
+        logger.info(f"Available tags in {EMBEDDER_URL}: {tags}")
+    except requests.RequestException as e:
+        logger.error(f"Failed to retrieve tags: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize the application")
+
+    logger.info("Setting up OpenAI client for Embedder connection...")
+    embedder = openai.OpenAI(
+        base_url=f"{EMBEDDER_URL}/v1/",
+        api_key="docker"
     )
 
-    print("Setting up S3 client for resume storage...")
+    logger.info("Testing embedder connection...")
+    try:
+        response = embedder.embeddings.create(
+            input=["Hi"],
+            model=EMBEDDER_ID
+        )
+        logger.info(f"Embedder response: {response}")
+    except Exception as e:
+        logger.error(f"Failed to connect to embedder: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize the application")
+
+    logger.info("Testing Gemini connection...")
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+    }
+    
+    payload = {
+        "contents": [
+            {"parts": [{"text": "Hi"}]}
+        ]
+    }
+
+    try:
+        response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        logger.info(response.json())
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error: {e}")
+
+    logger.info("Setting up S3 client for resume storage...")
     try:
         s3 = boto3.client("s3")
         s3.create_bucket(Bucket=S3_BUCKET_NAME, CreateBucketConfiguration={'LocationConstraint': S3_REGION})
     except s3.exceptions.BucketAlreadyExists:
-        print("Bucket already exists, continuing...")
+        logger.info("Bucket already exists, continuing...")
+    except s3.exceptions.BucketAlreadyOwnedByYou:
+        logger.info("Bucket already owned by you, continuing...")
     except Exception as e:
-        print(f"WARNING:\tFailed to setup S3: {e}")
+        logger.warning(f"Exception at S3 setup: {e}")
 
-    print("Setting up app.state...")
+    logger.info("Setting up app.state...")
     app.state.embedder = embedder
     app.state.s3 = s3
     app.state.users = {
@@ -69,4 +143,4 @@ async def initialise():
     app.state.index_jobs = {}
     app.state.cover_letter_jobs = {}
 
-    print("Startup complete.")
+    logger.info("Startup complete.")

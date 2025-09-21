@@ -5,6 +5,7 @@ networks:
 
 volumes:
   llama-cache:
+  ollama:
 
 services:
   api:
@@ -17,41 +18,24 @@ services:
       S3_REGION: ${S3_REGION}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       JWT_SECRET: ${JWT_SECRET}
-      EMBEDDER_URL: "http://llama-embedder:8080"
-      EMBEDDER_ID: "/models/embeddinggemma-300MF32.gguf"
+      EMBEDDER_URL: "http://ollama:11434"
+      EMBEDDER_ID: "nomic-embed-text:latest"
     volumes:
       - ./resources:/app_v1/resources
     ports:
       - "8080:8080"
     depends_on:
-      - llama-embedder
+      - ollama
     restart: unless-stopped
     networks:
-      - internal_net
       - public_net
 
-  llama-embedder:
-    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
-    container_name: llama-embedder
-    command: >
-      -m /models/embeddinggemma-300M-F32.gguf
-      -ngl 999
-      --embedding
-      --host 0.0.0.0
-      --port 8080
-      -c 4096
-    environment:
-      - GGML_VK_VISIBLE_DEVICES=0
-      - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
+  ollama:
+    image: ollama/ollama:latest
+    command: ["serve"]
     volumes:
-      - ./models:/models:ro
-      - llama-cache:/root/.cache
-    devices:
-      - /dev/dri:/dev/dri
-    security_opt:
-      - seccomp=unconfined
-    expose:
-      - "8080"
-    restart: unless-stopped
+      - ./ollama:/root/.ollama
+    ports:
+      - "11434:11434"
     networks:
-      - internal_net
+      - public_net

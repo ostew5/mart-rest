@@ -10,3 +10,4 @@ weasyprint
 jinja2
 boto3
 pyjwt
+pycognito

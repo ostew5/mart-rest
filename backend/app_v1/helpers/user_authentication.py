@@ -49,23 +49,19 @@ def rate_limiter(request_type: str):
         user: dict = Depends(authenticate),
     ):
         now = datetime.utcnow()
-
         requests_list = request.app.state.users[user["uuid"]]["requests"].get(request_type, [])
 
         if not isinstance(requests_list, list):
             requests_list = []
 
         requests_list = [r for r in requests_list if r > now]
-
         limit = get_subscription_limits()["requests_per_hour"][request_type][user["subscription_level"]]
 
         if len(requests_list) >= limit:
             raise HTTPException(status_code=429, detail=f"You have exceeded your subscription level request limit for {request_type} requests")
 
         _1hour = datetime.utcnow() + timedelta(hours=1)
-
         requests_list.append(_1hour)
-
         request.app.state.users[user["uuid"]]["requests"][request_type] = requests_list
 
         return lambda success : tick_rate_limiter(request.app, user, request_type, _1hour, success)

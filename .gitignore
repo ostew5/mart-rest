@@ -1,4 +1,4 @@
 *.env
 aws/
 awscliv2.zip
-models/*
+ollama/*
