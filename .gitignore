@@ -1,4 +1,2 @@
 *.env
-aws/
-awscliv2.zip
 ollama/*

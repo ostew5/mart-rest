@@ -3,11 +3,11 @@ This is the /v1/index_resume POST endpoint for indexing applicant
 resumes and storing them in a S3 bucket.
 
 It contains the endpoint:
-- POST /v1/index_resume/upload: Accepts a PDF file, processes it, and starts a background job to index the resume.
+- POST /v1/index_resume/start: Accepts a PDF file, processes it, and starts a background job to index the resume.
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
-from app_v1.helpers.user_authentication import authenticate, rate_limiter, get_subscription_limits
+from app_v1.helpers.cognito_auth import authenticate_session
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
 from fastapi.responses import JSONResponse
 from pypdf import PdfReader
@@ -135,8 +135,7 @@ def _set_status(app, job_id: str, status: str):
 def index_resume(
     text: str,
     job_id: str,
-    app: FastAPI,
-    tick_rate_limiter
+    app: FastAPI
 ):
     try:
         _set_status(app, job_id, status="Marking newlines")
@@ -185,11 +184,9 @@ def index_resume(
         )
 
         _set_status(app, job_id, status="Completed!")
-        tick_rate_limiter(True)
         return job_id
     except Exception as e:
         _set_status(app, job_id, status=f"Failed at {app.state.index_jobs[job_id]} with error: {str(e)}")
-        tick_rate_limiter(False)
 
 @router.post(
     "/start",
@@ -226,24 +223,21 @@ async def start_resume_indexing_job(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     request: Request,
-    user: dict = Depends(authenticate),
-    tick_rate_limiter = Depends(rate_limiter("index_resume"))
+    user: dict = Depends(authenticate_session)
 ):
     # Check file size
-    if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
-        tick_rate_limiter(False)
-        raise HTTPException(status_code=413, detail="File too large")
+    #if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
+    #    raise HTTPException(status_code=413, detail="File too large")
 
     # Quick PDF signature check
     if not file.file.read(5) == b"%PDF-":
-        tick_rate_limiter(False)
         raise HTTPException(status_code=400, detail="Not a valid PDF")
 
     job_id = str(uuid.uuid4())
 
     text = _read_pdf(file)
 
-    background_tasks.add_task(index_resume, text, job_id, request.app, tick_rate_limiter)
+    background_tasks.add_task(index_resume, text, job_id, request.app)
 
     return JSONResponse(
         {

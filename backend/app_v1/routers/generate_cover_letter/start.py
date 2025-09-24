@@ -8,7 +8,6 @@ and starts a background job to generate a cover letter.
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, Query, BackgroundTasks, Request, Depends
-from app_v1.helpers.user_authentication import authenticate, rate_limiter
 import requests, base64, boto3, faiss, gzip, json, uuid, pickle, os, re, logging
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -17,6 +16,8 @@ from weasyprint import HTML
 from datetime import date
 from io import BytesIO
 import numpy as np
+
+from app_v1.helpers.cognito_auth import authenticate_session
 
 env = Environment(
     loader=FileSystemLoader("resources"),
@@ -274,8 +275,7 @@ def generate_cover_letter(
     bundle: dict,
     job_listing_text: str,
     job_id: str,
-    app: FastAPI,
-    tick_rate_limiter
+    app: FastAPI
 ):
     try:
         index = bundle["index"]
@@ -328,11 +328,9 @@ def generate_cover_letter(
         )
 
         _set_status(app, job_id, status="Completed!")
-        tick_rate_limiter(True)
         return job_id
     except Exception as e:
         _set_status(app, job_id, status=f"Failed at {app.state.cover_letter_jobs[job_id]} with error: {str(e)}")
-        tick_rate_limiter(False)
 
 @router.put(
     "/start",
@@ -366,8 +364,7 @@ async def start_generate_cover_letter_job(
     request: Request,
     job_listing_url: str = Query(..., description="URL of the LinkedIn job listing"),
     file_id: str = Query(..., description="Indexed resume uuid"),
-    user: dict = Depends(authenticate),
-    tick_rate_limiter = Depends(rate_limiter("cover_letter"))
+    user: dict = Depends(authenticate_session)
 ):
     job_listing_url = job_listing_url.strip()
     file_id = file_id.strip()
@@ -375,7 +372,6 @@ async def start_generate_cover_letter_job(
     job_listing = requests.get(job_listing_url, timeout = 5)
 
     if job_listing.status_code != 200:
-        tick_rate_limiter(False)
         raise HTTPException(status_code=404, detail="Job listing not found")
 
     try:
@@ -406,9 +402,8 @@ async def start_generate_cover_letter_job(
 
         job_id = str(uuid.uuid4())
 
-        background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app, tick_rate_limiter)
+        background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app)
     except Exception as e:
-        tick_rate_limiter(False)
         raise HTTPException(status_code=404, detail=f"Indexed resume with id: {file_id} not found: {str(e)}")
 
     return JSONResponse(

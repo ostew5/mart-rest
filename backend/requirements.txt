@@ -11,3 +11,4 @@ jinja2
 boto3
 pyjwt
 pycognito
+python-dotenv

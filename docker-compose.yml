@@ -10,16 +10,8 @@ volumes:
 services:
   api:
     build: ./backend
-    environment:
-      GEMINI_API_URL: ${GEMINI_API_URL}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      S3_REGION: ${S3_REGION}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
-      JWT_SECRET: ${JWT_SECRET}
-      EMBEDDER_URL: "http://ollama:11434"
-      EMBEDDER_ID: "nomic-embed-text:latest"
+    env_file:
+      - .env
     volumes:
       - ./resources:/app_v1/resources
     ports:
@@ -31,7 +23,7 @@ services:
       - public_net
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest # Can change image for GPU support
     command: ["serve"]
     volumes:
       - ./ollama:/root/.ollama
