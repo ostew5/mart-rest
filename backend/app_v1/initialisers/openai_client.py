@@ -20,10 +20,13 @@ def initialiseOpenAI(app):
     logger.info("Testing OpenAI Client embedder connection...")
     try:
         response = app.state.embedder.embeddings.create(
-            input=["Hi"],
+            input=["Hi"], # Single token input to test
             model=EMBEDDER_ID
         )
-        logger.info(f"Embedder response: {response}")
+        if not response.usage.total_tokens:
+            logger.error("No tokens used in embedder response, something went wrong.")
+            return False
+        logger.info(f"Embedder usage: {response.usage}")
     except Exception as e:
         logger.error(f"Failed to connect to embedder: {e}")
         return False

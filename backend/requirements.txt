@@ -12,3 +12,4 @@ boto3
 pyjwt
 pycognito
 python-dotenv
+psycopg2-binary

@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
     libgdk-pixbuf-2.0-0 libglib2.0-0 libharfbuzz0b libfribidi0 \
     libffi8 libxml2 libxslt1.1 libjpeg62-turbo zlib1g \
-    fontconfig fonts-dejavu-core \
+    fontconfig fonts-dejavu-core pkg-config default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app_v1

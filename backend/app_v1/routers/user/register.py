@@ -19,6 +19,7 @@ router = APIRouter(prefix="/v1/user", tags=["user"])
 
 @router.post("/register")
 def cognito_sign_up(
+    subscription_level: str = "Basic",
     request: Request,
     auth: Authenticate = Depends(get_authenticate)
 ):
@@ -34,7 +35,16 @@ def cognito_sign_up(
                 COGNITO_CLIENT_SECRET,
                 auth.username
             ),
-            UserAttributes=[{"Name": "email", "Value": auth.email}]
+            UserAttributes=[
+                {
+                    "Name": "email", 
+                    "Value": auth.email
+                },
+                {
+                    "Name": "subscriptionLevel", 
+                    "Value": subscription_level
+                }
+            ]
         )
         return response
     except Exception as e:
