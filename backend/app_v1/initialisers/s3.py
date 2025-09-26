@@ -12,10 +12,10 @@ def initialiseS3(app):
         s3 = boto3.client("s3")
         logger.info(f"Creating bucket with Bucket={S3_BUCKET_NAME} 'LocationConstraint': {S3_REGION}")
         if S3_REGION is None:
-            s3_client.create_bucket(Bucket=S3_BUCKET_NAME)
+            s3.create_bucket(Bucket=S3_BUCKET_NAME)
         else:
             location_constraint = {'LocationConstraint': S3_REGION}
-            s3_client.create_bucket(
+            s3.create_bucket(
                 Bucket=S3_BUCKET_NAME,
                 CreateBucketConfiguration=location_constraint
             )
