@@ -10,6 +10,7 @@ def initialiseS3(app):
     logger.info("Setting up S3 client for storage...")
     try:
         s3 = boto3.client("s3")
+        logger.info(f"Creating bucket with Bucket={S3_BUCKET_NAME} 'LocationConstraint': {S3_REGION}")
         s3.create_bucket(Bucket=S3_BUCKET_NAME, CreateBucketConfiguration={'LocationConstraint': S3_REGION})
     except s3.exceptions.BucketAlreadyExists:
         logger.info("Bucket already exists, continuing...")
