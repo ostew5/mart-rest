@@ -9,11 +9,12 @@ S3_REGION = os.getenv("S3_REGION", None)
 def initialiseS3(app):
     logger.info("Setting up S3 client for storage...")
     try:
-        s3 = boto3.client("s3")
         logger.info(f"Creating bucket with Bucket={S3_BUCKET_NAME} 'LocationConstraint': {S3_REGION}")
         if S3_REGION is None:
+            s3 = boto3.client("s3")
             s3.create_bucket(Bucket=S3_BUCKET_NAME)
         else:
+            s3 = boto3.client("s3", region_name=S3_REGION)
             location_constraint = {'LocationConstraint': S3_REGION}
             s3.create_bucket(
                 Bucket=S3_BUCKET_NAME,
