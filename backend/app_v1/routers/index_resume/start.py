@@ -243,8 +243,17 @@ async def start_resume_indexing_job(
     #    raise HTTPException(status_code=413, detail="File too large")
 
     # Quick PDF signature check
-    if not file.file.read(5) == b"%PDF-":
+    if not file.read(5) == b"%PDF-":
         raise HTTPException(status_code=400, detail="Not a valid PDF")
+
+    subscription = {}
+
+    for attr in user_data['UserAttributes']:
+        if attr['Name'] == "custom:subscriptionLevel":
+            subscription = getSubscription(request.app, attr['Value'])
+
+    if file.size > subscription['MaxFileUploadKB']
+        raise HTTPException(status_code=413, detail="File too large")
 
     job_id = str(uuid.uuid4())
 

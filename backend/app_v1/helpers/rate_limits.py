@@ -169,7 +169,7 @@ def authenticateSessionAndRateLimit(request: Request):
     n_jobs_by_user = len(getRecentJobs(request.app, uuid))
     logger.info(f"Got number of recent jobs: {n_jobs_by_user}")
 
-    if n_jobs_by_user >= subscription['MaxAPIRequestsPerHour']:
+    if n_jobs_by_user >= subscription['MaxAPIRequestsPerHour'] and not subscription['MaxAPIRequestsPerHour'] == -1:
         raise HTTPException(status_code=429, detail=f"User has used their subscription rate limit of {subscription['MaxAPIRequestsPerHour']} API requests per hour")
 
     return user_data
