@@ -252,7 +252,7 @@ async def start_resume_indexing_job(
         if attr['Name'] == "custom:subscriptionLevel":
             subscription = getSubscription(request.app, attr['Value'])
 
-    if file.size > subscription['MaxFileUploadKB']
+    if file.size > subscription['MaxFileUploadKB']:
         raise HTTPException(status_code=413, detail="File too large")
 
     job_id = str(uuid.uuid4())
