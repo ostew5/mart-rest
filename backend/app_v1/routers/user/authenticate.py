@@ -5,8 +5,8 @@ It contains the endpoints:
 - POST /user/authenticate: logs the user in and returns a JWT token
 """
 
-from app_v1.helpers.cognito_auth import Authenticate, get_authenticate, create_hash, verify_cognito_token
-from fastapi import Request, APIRouter, Depends, HTTPException
+from app_v1.helpers.cognito_auth import Authenticate, createHash, verifyCognitoToken
+from fastapi import Request, APIRouter, Depends, HTTPException, Body
 import os, logging, jwt
 
 COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID")
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/v1/user", tags=["user"])
 @router.post("/authenticate")
 def cognito_initiate_authentication(
     request: Request,
-    auth: Authenticate = Depends(get_authenticate)
+    auth: Authenticate = Body(...)
 ):
     try:
         logger.info(f"Authenticating user {auth}")
@@ -31,12 +31,12 @@ def cognito_initiate_authentication(
             AuthParameters={
                 "USERNAME": auth.username,
                 "PASSWORD": auth.password,
-                "SECRET_HASH": create_hash(COGNITO_CLIENT_ID, COGNITO_CLIENT_SECRET, auth.username)
+                "SECRET_HASH": createHash(COGNITO_CLIENT_ID, COGNITO_CLIENT_SECRET, auth.username)
             },
             ClientId=COGNITO_CLIENT_ID  # match register
         )
         tokens = response["AuthenticationResult"]
-        decoded_user_data = verify_cognito_token(request.app.state.cognito, tokens["AccessToken"])
+        decoded_user_data = verifyCognitoToken(request.app.state.cognito, tokens["AccessToken"])
         logger.info(f"User {auth.username} authenticated successfully.")
         logger.info(f"Decoded user data: {decoded_user_data}")
         

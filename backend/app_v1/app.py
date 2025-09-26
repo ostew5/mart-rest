@@ -47,6 +47,8 @@ async def initialise():
     from app_v1.routers.user.authenticate import router as user_authenticate_router
     from app_v1.routers.user.register import router as user_register_router
     from app_v1.routers.user.confirm import router as user_confirm_router
+    from app_v1.routers.user.change_subscription import router as user_change_subscription_router
+    from app_v1.routers.user.subscription import router as user_subscription_router
 
     for router in [
         cover_letter_result_router,
@@ -56,7 +58,9 @@ async def initialise():
         index_resume_status_router,
         user_authenticate_router,
         user_register_router,
-        user_confirm_router
+        user_confirm_router,
+        user_change_subscription_router,
+        user_subscription_router
     ]:
         app.include_router(router)
 

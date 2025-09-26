@@ -1,4 +1,6 @@
 import psycopg2, logging, os
+from app_v1.helpers.rate_limits import initialiseRateLimitsTable
+from app_v1.helpers.ai_jobs import initialiseAIJobsTable
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -9,6 +11,8 @@ RDS_USER = os.getenv("RDS_USER")
 RDS_PASSWORD = os.getenv("RDS_PASSWORD")
 RDS_HOST = os.getenv("RDS_HOST")
 RDS_PORT = os.getenv("RDS_PORT")
+
+DROP_TABLES = os.getenv("DROP_TABLES", "False")
 
 def initialisePostgreSQL(app):
     logger.info("Initialising PostgreSQL...")
@@ -30,8 +34,30 @@ def initialisePostgreSQL(app):
         logger.info(f"PostgreSQL database version: {db_version}")
 
         cur.close()
-        logger.info("PostgreSQL initialised successfully.")
-        return True
     except Exception as e:
         logger.error(f"Failed to connect to PostgreSQL: {e}")
         return False
+
+    if DROP_TABLES == "True":
+        try:
+            drop_tables_sql = """
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public;
+            """
+            cur = app.state.postgresql_db.cursor()
+            cur.execute(drop_tables_sql)
+            app.state.postgresql_db.commit()
+            cur.close()
+            logger.info(f"Successfully dropped tables")
+        except Exception as e:
+            logger.error(f"Failed to drop tables: {e}")
+
+    try:
+        initialiseRateLimitsTable(app)
+        initialiseAIJobsTable(app)
+    except Exception as e:
+        logger.error(f"Failed to initialise tables: {e}")
+        return False
+
+    logger.info("PostgreSQL and tables initialised successfully.")
+    return True

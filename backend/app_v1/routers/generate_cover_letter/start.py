@@ -17,7 +17,8 @@ from datetime import date
 from io import BytesIO
 import numpy as np
 
-from app_v1.helpers.cognito_auth import authenticate_session
+from app_v1.helpers.rate_limits import authenticateSessionAndRateLimit
+from app_v1.helpers.ai_jobs import createJob, getJob, updateJobStatus, completeJob
 
 env = Environment(
     loader=FileSystemLoader("resources"),
@@ -243,6 +244,14 @@ def _generate_pdf(cover_letter_context):
     pdf_io.seek(0)
     return pdf_io
 
+def _upload_to_s3(s3, pdf_bytes, job_id):
+    s3.put_object(
+        Bucket=S3_BUCKET_NAME, 
+        Key=f"cover_letters/{job_id}.pdf", 
+        Body=pdf_bytes,
+        ContentType="application/pdf"
+    )
+
 def __bullets_to_html(text: str) -> str:
     if not text:
         return ""
@@ -267,43 +276,36 @@ def __bullets_to_html(text: str) -> str:
     return "\n".join(out)
 env.filters["bullets"] = __bullets_to_html
 
-def _set_status(app, job_id: str, status: str):
-    app.state.cover_letter_jobs.setdefault(job_id, {})
-    app.state.cover_letter_jobs[job_id].update(status = status)
-
 def generate_cover_letter(
     bundle: dict,
     job_listing_text: str,
     job_id: str,
+    user_id: str,
     app: FastAPI
 ):
     try:
+        createJob(app, job_id, user_id, "GenerateCoverletter", "Starting")
         index = bundle["index"]
         chunks = bundle["chunks"]
-
-        _set_status(app, job_id, status="Deserializing index")
+        
+        updateJobStatus(app, job_id, "Unpickling indexed resume")
         index = _deserialize_faiss(index)
 
-        _set_status(app, job_id, status="Loading html selectors")
+        updateJobStatus(app, job_id, "Loading html selectors")
         selectors = _load_selectors()
 
-        _set_status(app, job_id, status="Extracting job listing details")
+        updateJobStatus(app, job_id, "Extracting job listing details")
         job_listing_details = _extract_job_listing_details(job_listing_text, selectors)
 
-        _set_status(app, job_id, status="Retrieving relevant details from resume for job description")
-        retrieved = {}
-        retrieved["job_description"] = _retrieve(app, index, chunks, job_listing_details['description'], k=8)
+        updateJobStatus(app, job_id, "Retrieving relevant resume data")
+        retrieved = {
+            "job_description": _retrieve(app, index, chunks, job_listing_details['description'], k=8),
+            "name": _retrieve(app, index, chunks, "name", k=3),
+            "contact_details": _retrieve(app, index, chunks, "contact details", k=3),
+            "location": _retrieve(app, index, chunks, "location", k=3)
+        }
 
-        _set_status(app, job_id, status="Retrieving applicant name from resume")
-        retrieved["name"] = _retrieve(app, index, chunks, "name", k=3)
-
-        _set_status(app, job_id, status="Retrieving applicant contact details from resume")
-        retrieved["contact_details"] = _retrieve(app, index, chunks, "contact details", k=3)
-
-        _set_status(app, job_id, status="Retrieving applicant location from resume")
-        retrieved["location"] = _retrieve(app, index, chunks, "location", k=3)
-
-        _set_status(app, job_id, status="Creating prompt for cover letter generation")
+        updateJobStatus(app, job_id, "Constructing Gemini prompt")
         system, prompt = _make_prompt(
             job_listing_details['title'],
             job_listing_details['company'],
@@ -313,24 +315,20 @@ def generate_cover_letter(
             retrieved['name'] + retrieved['contact_details'] + retrieved['location']
         )
 
-        _set_status(app, job_id, status="Generating cover letter content with gemini")
+        updateJobStatus(app, job_id, "Asking Gemini to write a cover letter")
         cover_letter_content = _get_gemini_response(system, prompt)
 
-        _set_status(app, job_id, status="Creating pdf document")
+        updateJobStatus(app, job_id, "Generating a pdf with Gemini's response")
         pdf_bytes = _generate_pdf(cover_letter_content)
 
-        _set_status(app, job_id, status="Uploading to s3")
-        app.state.s3.put_object(
-            Bucket=S3_BUCKET_NAME, 
-            Key=f"cover_letters/{job_id}.pdf", 
-            Body=pdf_bytes,
-            ContentType="application/pdf"
-        )
+        updateJobStatus(app, job_id, "Uploading pdf to S3")
+        _upload_to_s3(app.state.s3, pdf_bytes, job_id)
 
-        _set_status(app, job_id, status="Completed!")
+        completeJob(app, job_id)
         return job_id
     except Exception as e:
-        _set_status(app, job_id, status=f"Failed at {app.state.cover_letter_jobs[job_id]} with error: {str(e)}")
+        job = getJob(app, job_id, user_id)
+        updateJobStatus(app, job_id, f"Job threw an Exception: {e} at {job['Status']}")
 
 @router.put(
     "/start",
@@ -364,7 +362,7 @@ async def start_generate_cover_letter_job(
     request: Request,
     job_listing_url: str = Query(..., description="URL of the LinkedIn job listing"),
     file_id: str = Query(..., description="Indexed resume uuid"),
-    user: dict = Depends(authenticate_session)
+    user_data: dict = Depends(authenticateSessionAndRateLimit)
 ):
     job_listing_url = job_listing_url.strip()
     file_id = file_id.strip()
@@ -399,17 +397,19 @@ async def start_generate_cover_letter_job(
 
         if bundle["uuid"] != file_id:
             raise HTTPException(status_code=400, detail="File ID does not match the indexed resume")
-
-        job_id = str(uuid.uuid4())
-
-        background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, request.app)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Indexed resume with id: {file_id} not found: {str(e)}")
 
-    return JSONResponse(
-        {
-            "uuid": job_id,
-            "message": "Generate cover letter job started in the background"
-        },
-        status_code=202
-    )
+    job_id = str(uuid.uuid4())
+
+    for attr in user_data['UserAttributes']:
+        if attr['Name'] == "sub":
+            background_tasks.add_task(generate_cover_letter, bundle, job_listing.text, job_id, attr['Value'], request.app)
+            return JSONResponse(
+                {
+                    "uuid": job_id,
+                    "message": "Generate cover letter job started in the background"
+                },
+                status_code=202
+            )
+    raise HTTPException(status_code=401, detail=f"No User Attribute: sub")

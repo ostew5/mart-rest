@@ -7,12 +7,14 @@ It contains the endpoint:
 """
 
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Depends
-from app_v1.helpers.cognito_auth import authenticate_session
 import base64, faiss, boto3, gzip, uuid, json, re, os, pickle
 from fastapi.responses import JSONResponse
 from pypdf import PdfReader
 from io import BytesIO
 import numpy as np
+
+from app_v1.helpers.rate_limits import authenticateSessionAndRateLimit
+from app_v1.helpers.ai_jobs import createJob, getJob, updateJobStatus, completeJob
 
 router = APIRouter(prefix="/v1/index_resume", tags=["index_resume"])
 
@@ -128,65 +130,76 @@ def _get_serialized_faiss(resp: list) -> faiss.Index:
 
     return faiss.serialize_index(index)
 
-def _set_status(app, job_id: str, status: str):
-    app.state.index_jobs.setdefault(job_id, {})
-    app.state.index_jobs[job_id].update(status = status)
+def _pickle_faiss(faiss):
+    buffer = BytesIO()
+    pickle.dump(faiss, buffer)
+    buffer.seek(0)
+    return buffer
+
+def _compress_chunks(chunks, job_id):
+    bundle = {
+        "chunks": chunks,
+        "uuid": job_id
+    }
+
+    return gzip.compress(json.dumps(bundle).encode("utf-8"))
+
+def _upload_to_s3(s3, pickled_faiss, compressed_chunks, job_id):
+    s3.upload_fileobj(
+        pickled_faiss,
+        S3_BUCKET_NAME,
+        f"resumes/{job_id}.pkl"
+    )
+
+    s3.put_object(
+        Bucket=S3_BUCKET_NAME, 
+        Key=f"resumes/{job_id}.bin", 
+        Body=compressed_chunks,
+        ContentType="application/json", 
+        ContentEncoding="gzip"
+    )
 
 def index_resume(
     text: str,
     job_id: str,
+    user_id: str,
     app: FastAPI
 ):
     try:
-        _set_status(app, job_id, status="Marking newlines")
+        createJob(app, job_id, user_id, "IndexResume", "Starting")
+
+        updateJobStatus(app, job_id, "Marking newlines in resume")
         text = _mark_newlines(text)
 
-        _set_status(app, job_id, status="Cleaning text")
+        updateJobStatus(app, job_id, "Cleaning resume text")
         text = _clean_text(text)
 
-        _set_status(app, job_id, status="Chunking text")
+        updateJobStatus(app, job_id, "Splitting resume into chunks")
         chunks = _split_text(text)
 
-        _set_status(app, job_id, status="Overlapping chunks")
+        updateJobStatus(app, job_id, "Overlapping chunks")
         overlapping_chunks = _overlap_chunks(chunks)
 
-        _set_status(app, job_id, status="Getting embeddings")
+        updateJobStatus(app, job_id, "Getting embeddings for overlapped chunks")
         resp = _get_embeddings(overlapping_chunks, app.state.embedder)
 
-        _set_status(app, job_id, status="Serializing embeddings")
+        updateJobStatus(app, job_id, "Getting serialized FAISS index")
         index_data = _get_serialized_faiss(resp)
 
-        _set_status(app, job_id, status="Uploading to s3")
+        updateJobStatus(app, job_id, "Pickling index")
+        pickled_faiss = _pickle_faiss(index_data)
+
+        updateJobStatus(app, job_id, "Compressing overlapping chunks")
+        compressed_chunks = _compress_chunks(overlapping_chunks, job_id)
         
-        buffer = BytesIO()
-        pickle.dump(index_data, buffer)
-        buffer.seek(0)
+        updateJobStatus(app, job_id, "Uploading to S3")
+        _upload_to_s3(app.state.s3, pickled_faiss, compressed_chunks, job_id)
 
-        bundle = {
-            "chunks": overlapping_chunks,
-            "uuid": job_id
-        }
-
-        blob = gzip.compress(json.dumps(bundle).encode("utf-8"))
-        
-        app.state.s3.upload_fileobj(
-            buffer,
-            S3_BUCKET_NAME,
-            f"resumes/{job_id}.pkl"
-        )
-
-        app.state.s3.put_object(
-            Bucket=S3_BUCKET_NAME, 
-            Key=f"resumes/{job_id}.bin", 
-            Body=blob,
-            ContentType="application/json", 
-            ContentEncoding="gzip"
-        )
-
-        _set_status(app, job_id, status="Completed!")
+        completeJob(app, job_id)
         return job_id
     except Exception as e:
-        _set_status(app, job_id, status=f"Failed at {app.state.index_jobs[job_id]} with error: {str(e)}")
+        job = getJob(app, job_id, user_id)
+        updateJobStatus(app, job_id, f"Job threw an Exception: {e} at {job['Status']}")
 
 @router.post(
     "/start",
@@ -223,7 +236,7 @@ async def start_resume_indexing_job(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     request: Request,
-    user: dict = Depends(authenticate_session)
+    user_data: dict = Depends(authenticateSessionAndRateLimit)
 ):
     # Check file size
     #if file.size > get_subscription_limits()["max_resume_size"][user["subscription_level"]]:
@@ -237,12 +250,14 @@ async def start_resume_indexing_job(
 
     text = _read_pdf(file)
 
-    background_tasks.add_task(index_resume, text, job_id, request.app)
-
-    return JSONResponse(
-        {
-            "uuid": job_id,
-            "message": "Resume indexing job started in the background"
-        },
-        status_code=202
-    )
+    for attr in user_data['UserAttributes']:
+        if attr['Name'] == "sub":
+            background_tasks.add_task(index_resume, text, job_id, attr['Value'], request.app)
+            return JSONResponse(
+                {
+                    "uuid": job_id,
+                    "message": "Resume indexing job started in the background"
+                },
+                status_code=202
+            )
+    raise HTTPException(status_code=401, detail=f"No User Attribute: sub")

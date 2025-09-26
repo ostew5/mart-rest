@@ -6,7 +6,9 @@ It contains the endpoint:
 - GET /v1/index_resume/status/{job_id}: Returns the status of the indexing job.
 """
 
-from fastapi import HTTPException, Request, APIRouter
+from fastapi import HTTPException, Request, APIRouter, Depends
+from app_v1.helpers.cognito_auth import authenticateSession
+from app_v1.helpers.ai_jobs import getJob
 
 router = APIRouter(prefix="/v1/index_resume", tags=["index_resume"])
 
@@ -30,12 +32,10 @@ Retrieve the current status of a resume indexing job.
 )
 def get_resume_indexing_job_status(
     job_id: str, 
-    request: Request
+    request: Request,
+    user_data: dict = Depends(authenticateSession)  
 ):
-    app = request.app
-    if not hasattr(app.state, "index_jobs"):
-        raise HTTPException(status_code=404, detail="No jobs found")
-    job = app.state.index_jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return {"uuid": job_id, **job}
+    for attr in user_data['UserAttributes']:
+        if attr['Name'] == "sub":
+            return getJob(request.app, job_id, attr['Value'])
+    raise HTTPException(status_code=401, detail=f"No User Attribute: sub")

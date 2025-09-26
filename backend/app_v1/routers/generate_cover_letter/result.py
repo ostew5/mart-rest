@@ -6,10 +6,13 @@ It contains the endpoint:
 - GET /v1/generate_cover_letter/result/{job_id}: Returns the generated cover letter.
 """
 
-from fastapi import HTTPException, Request, APIRouter
+from fastapi import HTTPException, Request, APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import os, logging
+
+from app_v1.helpers.cognito_auth import authenticateSession
+from app_v1.helpers.ai_jobs import getJob
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,8 @@ Return the generated cover letter as a PDF file for a given job ID.
 )
 def get_generated_cover_letter(
     job_id: str, 
-    request: Request
+    request: Request,
+    user_data: dict = Depends(authenticateSession)
 ):    
     pdf_io = BytesIO()
 
@@ -51,12 +55,11 @@ def get_generated_cover_letter(
         )
     except Exception as e:
         logger.error(f"Error getting cover letter PDF: {e}")
-        job = request.app.state.cover_letter_jobs.get(job_id)
-
-        if not job:
-            raise HTTPException(status_code=404, detail=f"Cover letter PDF not found: {str(e)}")
-
-        raise HTTPException(status_code=409, detail=f"Not ready: {str(job)}")
+        for attr in user_data['UserAttributes']:
+            if attr['Name'] == "sub":
+                job = getJob(request.app, job_id, attr['Value'])
+                raise HTTPException(status_code=409, detail=f"Not ready: {str(job)}")
+        raise HTTPException(status_code=404, detail=f"Cover letter PDF not found: {str(e)}")
 
     pdf_io.seek(0)
 
