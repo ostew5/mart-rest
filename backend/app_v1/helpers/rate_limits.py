@@ -62,9 +62,9 @@ def createDefaultRateLimitsTable(app):
         insert_data_query = """
             INSERT INTO UserSubscriptionLevels (SubscriptionLevel, Description, MaxAPIRequestsPerHour, MaxFileUploadKB)
             VALUES 
-            ('Basic', 'Basic subscription level with limited features.', 5, 20),
-            ('Premium', 'Premium subscription level with enhanced features.', 100, 100),
-            ('Admin', 'Administrator access with no limits and additional administrative privileges.', -1, -1);
+            ('Basic', 'Basic subscription level with limited features.', 5, 100),
+            ('Premium', 'Premium subscription level with enhanced features.', 100, 500),
+            ('Admin', 'Administrator access with no limits.', -1, -1);
             """
         
         cur.execute(insert_data_query)
@@ -169,7 +169,7 @@ def authenticateSessionAndRateLimit(request: Request):
     n_jobs_by_user = len(getRecentJobs(request.app, uuid))
     logger.info(f"Got number of recent jobs: {n_jobs_by_user}")
 
-    if n_jobs_by_user >= subscription['MaxAPIRequestsPerHour'] and not subscription['MaxAPIRequestsPerHour'] == -1:
+    if n_jobs_by_user >= subscription['MaxAPIRequestsPerHour'] and subscription['MaxAPIRequestsPerHour'] > 0:
         raise HTTPException(status_code=429, detail=f"User has used their subscription rate limit of {subscription['MaxAPIRequestsPerHour']} API requests per hour")
 
     return user_data
