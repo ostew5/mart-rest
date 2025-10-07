@@ -13,3 +13,4 @@ pyjwt
 pycognito
 python-dotenv
 psycopg2-binary
+amazon-sqs-extended-client 

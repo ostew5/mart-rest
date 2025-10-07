@@ -13,7 +13,6 @@ from pypdf import PdfReader
 from io import BytesIO
 import numpy as np
 
-
 from app_v1.helpers.rate_limits import authenticateSessionAndRateLimit, getSubscription
 from app_v1.helpers.ai_jobs import createJob, getJob, updateJobStatus, completeJob
 
